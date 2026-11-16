@@ -1,367 +1,56 @@
-# mcp-memory-service
+# Shared Project Memory
 
-## Persistent Shared Memory for AI Agent Pipelines
+A fork of [doobidoo/mcp-memory-service](https://github.com/doobidoo/mcp-memory-service), pinned to **v12.10.0**. Apache-2.0. The upstream service and license are retained; the project-specific extension is in `handoff/` and the portable client in `client/`.
 
-Open-source memory backend for AI agents — **REST API, MCP, OAuth, CLI, dashboard**. One self-hosted service, every transport.
-Agents store decisions, share causal knowledge graphs, and retrieve
-context in 5ms — without cloud lock-in or API costs.
+## What is stored
 
-**Works with LangGraph · CrewAI · AutoGen · any HTTP client · Claude Desktop · OpenCode**
+SQLite contains separate project, section, session, action, checkpoint, decision, incident, verification and knowledge tables. Sections such as `web`, `database` and `operations` are database entities with many-to-many record links, not folders or a tag-only prompt convention. One action can belong to several sections. Explicit sections are combined with conservative technology markers; unknown material stays `unclassified`. Customer-specific names, patterns and aliases belong in a private JSON policy selected by `MCP_HANDOFF_SECTIONS_FILE`, outside the repository. The hub installer preserves an existing private `sections.json` in its settings directory.
 
----
+Search order is **section -> keywords -> semantic task context**. Each stage runs only if the previous stage found nothing. Responses expose the stage and trace. Retrieval stays inside the selected project. Historical knowledge requires `include_archive: true`. Imported content does not become verified configuration or authorization.
 
-[![Website](https://img.shields.io/badge/Website-mcpmemory.services-00e5ff?logo=cloudflare&logoColor=white)](https://mcpmemory.services)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![PyPI version](https://img.shields.io/pypi/v/mcp-memory-service?color=blue&logo=pypi&logoColor=white)](https://pypi.org/project/mcp-memory-service/)
-[![Python](https://img.shields.io/pypi/pyversions/mcp-memory-service?logo=python&logoColor=white)](https://pypi.org/project/mcp-memory-service/)
-[![GitHub stars](https://img.shields.io/github/stars/doobidoo/mcp-memory-service?logo=github&label=stars)](https://github.com/doobidoo/mcp-memory-service)
-[![Remote MCP](https://img.shields.io/badge/MCP-Remote%20Support-blue?logo=anthropic)](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/remote-mcp-setup.md)
-[![OAuth 2.0](https://img.shields.io/badge/Auth-OAuth%202.0%20%2B%20DCR-green)](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/oauth-setup.md)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/doobidoo/mcp-memory-service)
+Native session sources are read incrementally. Converted Claude transcripts retained by Codex keep their Claude provenance; missing original action data is explicitly marked. Only visible messages, commands, tool-result excerpts, changed file references and explicit states are exported. Private reasoning, system instructions, images, credentials and full raw transcripts are not copied. Large outputs are bounded, with omissions and source locators recorded. Session history is not a working-tree sync. Continue a task through `session_context` and save explicit checkpoints, decisions, incidents and actual checks.
 
-Getting started: [English](https://mcpmemory.services/) · [Deutsch](https://mcpmemory.services/de/) · [Español](https://mcpmemory.services/es/) · [日本語](https://mcpmemory.services/ja/) · [简体中文](https://mcpmemory.services/zh-cn/) · [繁體中文](https://mcpmemory.services/zh-tw/) · [Français](https://mcpmemory.services/fr/) · [Português (Brasil)](https://mcpmemory.services/pt-br/) · [한국어](https://mcpmemory.services/ko/)
+## Components
 
----
+- Hub: one Linux process, Python 3.12, SQLite/sqlite-vec, local multilingual MiniLM L12 ONNX UINT8. The hub refuses hash embeddings. No Ollama, Redis, paid model API or PyTorch dependency.
+- Client: Python 3.11+, standard library only, a versioned zipapp. macOS, Linux and Windows source paths; `CODEX_HOME` and `CLAUDE_CONFIG_DIR` overrides. Longest matching root selects the project. Use the same project ID with explicit root aliases on another host.
+- MCP: local stdio bridge to `/handoff/mcp` over HTTPS. Independent credentials per project, enforced by the hub. Every stdio tool call requires an explicit project; process cwd is only a suggestion for the agent. Only bounded structured tools are exposed. The upstream admin API must remain on loopback.
+- Sync: acknowledged cursors, idempotent event IDs, SQLite delta revisions, source locks, optimistic record revisions and version history. The background exporter does not require a model login or hook trust.
 
-<div align="center">
-  <video src="https://mcpmemory.services/assets/videos/knowledge-graph-3d.mp4" poster="https://mcpmemory.services/assets/images/knowledge-graph-3d-poster.png" width="820" autoplay loop muted playsinline controls>
-    <a href="https://mcpmemory.services/"><img src="https://mcpmemory.services/assets/images/knowledge-graph-3d.png" alt="3D knowledge graph — memories as a glowing, interactive galaxy" width="820"></a>
-  </video>
-  <p><em>▶ <a href="https://mcpmemory.services/">The 3D knowledge graph in motion</a></em> — every memory a glowing node, every relationship a curved edge.</p>
-</div>
+## Install and update
 
----
+Download `bootstrap.py` from this fork's GitHub release. It validates release artifact SHA-256 checksums and installs an immutable version, preserving private config. The checksum manifest is trusted from the same GitHub repository; it is not an independent signature.
 
-## Why Agents Need This
-
-Your AI assistant forgets everything when you start a new chat. You spend 10 minutes re-explaining your architecture. **Again.** MCP Memory Service captures project context, architecture decisions, and code patterns automatically — new sessions start with everything already known.
-
-| Without mcp-memory-service | With mcp-memory-service |
-|---|---|
-| Each agent run starts from zero | Agents retrieve prior decisions in 5ms |
-| Memory is local to one graph/run | Memory is shared across all agents and runs |
-| You manage Redis + Pinecone + glue code | One self-hosted service, zero cloud cost |
-| No causal relationships between facts | Knowledge graph with typed edges (causes, fixes, contradicts) |
-| Context window limits create amnesia | Autonomous consolidation compresses old memories |
-
-**Key capabilities for agent pipelines:**
-- **Framework-agnostic REST API** — no MCP client library needed; the live endpoint list is at `/api/docs`
-- **Knowledge graph** — agents share causal chains, not just facts
-- **`X-Agent-ID` header** — auto-tag memories by agent identity for scoped retrieval
-- **`conversation_id`** — bypass deduplication for incremental conversation storage
-- **SSE events** — real-time notifications when any agent stores or deletes a memory
-- **Embeddings run locally via ONNX** — memory never leaves your infrastructure
-
----
-
-## 🚀 Get Started in 60 Seconds
-
-> Not sure which setup fits? The **[Setup Guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/setup-guide.md)** walks you to the right path in under a minute.
-
-**1. Install:**
-
-```bash
-pip install "mcp-memory-service[sqlite]"
+```sh
+python3 bootstrap.py hub --release v12.10.0-teknova.6
+python3 tools/handoff/manage.py provision --inventory private-inventory.json --url https://memory.example.org/handoff
+python3 bootstrap.py client --registry /private/path/connections.json
+python3 /private/path/shared-memory.py --registry /private/path/connections.json install
+python3 /private/path/shared-memory.py update
 ```
 
-The `[sqlite]` extra brings the local ONNX embedding model. Without it, semantic
-search falls back to hash embeddings.
+The hub installer binds to `127.0.0.1:18765`; configure your existing HTTPS gateway to proxy **only `/handoff/*`**, with valid TLS. Provision credentials locally, distribute only the needed project keys, and never commit the private registry. The client installer merges both agents' MCP settings and hooks, preserves other tools, makes config backups, and starts a native login/background service. Codex hook trust is never altered: review the added hooks in `/hooks` or Settings. Restart agent sessions to load new MCP tools. Claude auto-memory is disabled after connecting shared memory; old files are retained and imported as references.
 
-<details>
-<summary><strong>Using uv instead of pip</strong></summary>
-
-Install the `memory` command into its own environment:
-
-```bash
-uv tool install "mcp-memory-service[sqlite]"
-```
-
-Or skip the install and let your client start the server through `uvx`:
+`shared-memory.py discover` inventories source metadata without reading authentication data. Review project ownership and archive scope before provisioning. A private registry has this shape:
 
 ```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "uvx",
-      "args": ["--from", "mcp-memory-service[sqlite]", "memory", "server"]
-    }
-  }
-}
+{"schema":1,"device_id":"unique-host-id","url":"https://memory.example.org/handoff","projects":{"example":{"token":"private-project-key","roots":["/work/example","C:/work/example"],"knowledge_scope":"active","default_sections":[]}}}
 ```
 
-</details>
+Run `shared-memory.py --registry ... sync`, `status`, `context --project example` or `call --project example section_list --input request.json`. `mcp --agent codex` and `mcp --agent claude` serve stdio MCP. Automatic export retains native source files; it cannot replace the assistants' internal history storage.
 
-**2. Configure your AI client:**
+## One-time imports and recovery
 
-<details open>
-<summary><strong>Claude Desktop</strong></summary>
+`import-docs --project example --scope active /work/example/docs` imports Markdown and Word text as dated `imported` references. DOCX needs Pandoc; legacy DOC uses macOS textutil. Images, diagrams, executable code, generated CLI help and other assets remain at source. Memory gets a small file reference with relative path, size, type and SHA-256 instead of copying their bodies. Documentation is not watched continuously. Choose archive scope for past-employer/unverified historical runbooks. Claude Markdown memory is an incrementally synced source.
 
-Add to your config file:
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+`import-legacy --project historical-example /path/old.db` reads the public agent-memory-mcp SQLite schema without changing it, preserving original dates in archive-only records. Do not merge another employer's history into active knowledge.
 
-```json
-{
-  "mcpServers": {
-    "memory": {
-      "command": "memory",
-      "args": ["server"]
-    }
-  }
-}
-```
+Every hub update takes a SQLite online backup before switching the executable. Failed startup restores the previous executable and service configuration. `tools/handoff/manage.py verify-backup /path/to/backup.sqlite3` restores into a temporary DB and checks integrity and table counts. Backups contain private data and remain outside GitHub. A future schema change requires a migration and tested rollback; the current initial schema is 1.
 
-Restart Claude Desktop. Your AI now remembers everything across sessions.
+## Verification and limitations
 
-</details>
+Run `pytest -q tests/unit/test_structured_handoff.py tests/unit/test_handoff_client.py tests/unit/test_section_policy.py`. These tests cover ordering, sections, project isolation, archives, concurrent revisions, stale vectors, incremental source updates, output bounds, native paths, secret redaction and preserving hook trust. The CI matrix exercises native clients on Windows, macOS and Linux. Real-model retrieval, actual source export, service restart and backup checks must additionally be run on the target hub; unit tests intentionally do not download models.
 
-<details>
-<summary><strong>Claude Code</strong></summary>
+Administrator-owned `redact_patterns` may be provisioned per project in the private inventory; they are enforced by the hub before persistence. Redaction recognizes common credential formats and private addresses. It is not a proof that arbitrary free text contains no sensitive material. Review the corpus and keep the service private. Historical sessions do not reliably encode task boundaries, final decisions or every attachment: coverage remains explicit and partial. Real model-to-model handoff additionally needs both agent logins; a protocol test alone does not establish that.
 
-```bash
-claude mcp add memory -- memory server
-```
-
-Restart Claude Code. Memory tools will appear automatically.
-
-</details>
-
-<details>
-<summary><strong>Agent pipelines (REST API — LangGraph, CrewAI, AutoGen, any HTTP client)</strong></summary>
-
-```bash
-MCP_ALLOW_ANONYMOUS_ACCESS=true memory server --http
-# REST API running at http://localhost:8000
-```
-
-Store a memory with `POST /api/memories`, search with `POST /api/search`, retrieve by tag
-with `POST /api/search/by-tag`. Send `X-Agent-ID: <id>` on a store request and the server
-tags the memory `agent:<id>`, which a tag search then scopes retrieval by.
-
-Worked examples per framework, the tag conventions and the async patterns:
-**[docs/agents/](https://github.com/doobidoo/mcp-memory-service/tree/main/docs/agents)**
-
-</details>
-
-<details>
-<summary><strong>OpenCode</strong></summary>
-
-```bash
-MCP_ALLOW_ANONYMOUS_ACCESS=true memory server --http
-```
-
-The plugin ships as repository files for the local plugin directory, so clone the
-repository once even if you installed from PyPI. Install steps, the `/memory` slash
-command and the endpoint override:
-**[opencode/README.md](https://github.com/doobidoo/mcp-memory-service/blob/main/opencode/README.md)**
-
-</details>
-
-<details>
-<summary><strong>Codex (automatic memory hooks)</strong></summary>
-
-Start the Memory Service HTTP API, then install the hooks from this repository:
-
-```bash
-python3 codex/install_hooks.py
-```
-
-Restart Codex and review the hooks with `/hooks`. They retrieve project context,
-capture new learnings, and checkpoint outcomes before compaction and at session end.
-See [Codex hook setup](codex/README.md) for prerequisites, authentication, and project-local installation.
-
-</details>
-
-<details>
-<summary><strong>claude.ai and ChatGPT (browser — Remote MCP)</strong></summary>
-
-Remote MCP puts persistent memory in the browser on any device, no desktop app required:
-OAuth 2.0 over HTTPS, self-hosted or cloud-hosted. Both claude.ai and ChatGPT
-(Developer Mode) connect to the same endpoint.
-
-Cloudflare Tunnel quick start, Let's Encrypt, nginx, Caddy and Docker production setups:
-**[Remote MCP Setup](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/remote-mcp-setup.md)** ·
-[5-minute tutorial](https://mcpmemory.services/blog/remote-mcp-tutorial.html)
-
-</details>
-
-<details>
-<summary><strong>Advanced: custom backends and team setup</strong></summary>
-
-```bash
-git clone https://github.com/doobidoo/mcp-memory-service.git
-cd mcp-memory-service
-python scripts/installation/install.py
-```
-
-Choose from **SQLite** (local, fast, single-user), **Cloudflare** (cloud, multi-device
-sync), **Hybrid** (5ms local reads with background cloud sync — recommended for
-production) or **Milvus** (dedicated vector DB: Lite file, self-hosted, or Zilliz Cloud).
-For self-hosted team setups, the Hybrid backend can sync to another **HTTP MCP Memory Service** 
-instead of Cloudflare using `MCP_HYBRID_SECONDARY_BACKEND=http`.
-
-For long-lived services, prefer Docker Milvus or Zilliz Cloud over Milvus Lite —
-[why](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/milvus-backend.md#which-uri-to-use).
-
-</details>
-
----
-
-## ⚡ Works With Your Favorite AI Tools
-
-- **Agent frameworks (REST):** LangGraph · CrewAI · AutoGen · OpenClaw/Nanobot · any HTTP client
-- **CLI and terminal (MCP):** Claude Code · Gemini CLI · OpenCode · Codex CLI · Goose · Aider · Amp
-- **Desktop and IDE (MCP):** Claude Desktop · VS Code · Cursor · Windsurf · Raycast · JetBrains · Zed
-- **Chat (MCP):** ChatGPT (Developer Mode) · claude.ai (Remote MCP over HTTPS)
-
-Full list, plus clients without OAuth such as Home Assistant:
-**[docs/integrations.md](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/integrations.md)**
-
----
-
-## ✨ Features
-
-### Store and retrieve context
-
-- 🧠 **Persistent memory** — Keep decisions, notes, and project context across sessions and agents.
-- 🔍 **Semantic and keyword search** — Combine vector search with BM25; use `mode="ranked"`
-  to weigh recency, access frequency, and quality. An optional fallback cascade tries
-  exact and tag matching when semantic results are sparse.
-- 🏷️ **Scoped retrieval** — Filter by tags with AND/OR matching, natural-language time
-  ranges, and store partitions (`default`, `docs`, or `all` for cross-store search).
-- 📝 **Optional search summaries** — Request `summarize=true` for query-aware summaries
-  with validated source references. Requires `MCP_SEARCH_SUMMARIZE_ENABLED=true`
-  and a configured LLM provider; unavailable summaries fall back to raw results.
-  [Search API and examples](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/mastery/api-reference.md)
-- 📄 **Document ingestion** — Import PDF, text, and Markdown with chunking for retrieval.
-  Additional formats such as DOCX and PPTX require optional parsing tools.
-  [Document ingestion guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/document-ingestion.md)
-
-### Capture and maintain knowledge
-
-- ⚡ **Automatic session capture** — Configurable Claude Code hooks retrieve context and
-  save session learnings; the local `memory_harvest` tool extracts decisions, bugs,
-  conventions, and lessons from transcripts.
-  [Hooks setup](https://github.com/doobidoo/mcp-memory-service/blob/main/claude-hooks/README.md) ·
-  [Harvest configuration](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/mastery/configuration-guide.md)
-- 💡 **Autonomous consolidation** — Schedule clustering, compression, association discovery,
-  and controlled forgetting. Insight cards surface patterns, trends, and knowledge gaps.
-  [Consolidation guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/guides/memory-consolidation-guide.md)
-- 💭 **Beliefs and contradiction handling** — Derive confidence-scored beliefs from
-  observations. Heuristic contradiction detection can mark older memories as superseded,
-  hiding them from default retrieval while retaining them for explicit lookup.
-- 🤖 **Agent bootstrap profiles** — `get_bootstrap_profile` assembles behavioral context
-  for a new agent within a token budget, with optional task-aware retrieval.
-  Requires `MCP_BOOTSTRAP_ENABLED=true`; profiles are not isolated by project.
-- 🧬 **Knowledge graph and entities** — Explore typed causal relationships in the interactive
-  graph. 🔗 Entity extraction links @mentions, #tags, URLs, and file paths to a queryable entity graph.
-  [Knowledge graph guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/features/knowledge-graph-dashboard.md)
-- 🏠 **Quality scoring** — Use your own OpenAI-compatible endpoint, including Ollama,
-  LiteLLM, or vLLM.
-  [Configuration guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/mastery/configuration-guide.md)
-
-### Run locally and share across devices
-
-- 🔒 **Local-first storage** — Local ONNX embeddings and SQLite storage keep core memory
-  operations on your infrastructure. Optional LLM features use the providers you configure.
-- ☁️ **Cloud or self-hosted sync** — Use Cloudflare or another MCP Memory Service instance
-  as a Hybrid secondary. Separately enabled delta-sync exchanges changes between hosts;
-  it is off by default.
-  [Self-hosted sync guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/guides/self-hosted-sync-hub.md)
-- 📦 **Import, export, and migration** — Move memories through JSON import/export, including
-  conversion of mem0 exports.
-  [Import/export tools](https://github.com/doobidoo/mcp-memory-service/blob/main/scripts/sync/README.md) ·
-  [mem0 migration guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/guides/mem0-import.md)
-- 💾 **Database backups** — Configure scheduled backups or trigger one manually through
-  the HTTP API. Inspect backup status and available snapshots through the backup endpoints
-  in the live API reference at `/api/docs`.
-- 📊 **Web dashboard** — Search, browse, visualize, and manage memories at `http://localhost:8000`.
-
-The dashboard has eight tabs — Dashboard, Search, Browse, Documents, Manage, Analytics,
-Quality, API Docs. [Two-minute walkthrough on YouTube](https://youtu.be/W34r8VFoSdQ) ·
-[Web Dashboard Guide](https://github.com/doobidoo/mcp-memory-service/wiki/Web-Dashboard-Guide)
-
-How it compares to Mem0, Zep and the MCP-native alternatives, benchmark results, and
-deployments people run in production: **[mcpmemory.services](https://mcpmemory.services)**
-
----
-
-## 🛠️ Configuration Highlights
-
-```bash
-memory launch                  # Start HTTP server in background (127.0.0.1:8000)
-memory launch --port 8192      # Custom port
-memory info                    # Status and health
-memory logs --lines 50         # Recent logs
-memory stop                    # Stop server
-```
-
-These commands are optimized for fast startup and avoid loading heavy ML dependencies
-unless needed.
-
-> ⚠️ **Security note:** the server binds to `127.0.0.1` (localhost only) by default.
-> `--host 0.0.0.0` / `MCP_HTTP_HOST=0.0.0.0` exposes the API to your network — do that
-> only in trusted environments with authentication and firewall rules, or behind TLS
-> termination or a VPN overlay.
-
-Backends, embedding models, quality scoring and every environment variable:
-**[Configuration Guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/mastery/configuration-guide.md)**
-
----
-
-## 📚 Documentation
-
-- **[Setup Guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/setup-guide.md)** – Decision tree and step-by-step paths
-- **[Agent Integration Guides](https://github.com/doobidoo/mcp-memory-service/tree/main/docs/agents)** – LangGraph, CrewAI, AutoGen, HTTP generic
-- **[Remote MCP Setup](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/remote-mcp-setup.md)** – claude.ai and ChatGPT via HTTPS + OAuth
-- **[Configuration Guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/mastery/configuration-guide.md)** – Backend options and customization
-- **[Architecture Overview](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/architecture.md)** – How it works under the hood
-- **[Knowledge Graph Dashboard](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/features/knowledge-graph-dashboard.md)** – Interactive graph visualization
-- **[Benchmarks](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/BENCHMARKS.md)** – LongMemEval, DevBench, LoCoMo, xerj agent-memory, with run commands
-- **[Migration Guide](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/MIGRATION.md)** – Upgrading between major versions
-- **[Troubleshooting](https://github.com/doobidoo/mcp-memory-service/tree/main/docs/troubleshooting)** – Common issues and solutions
-- **[Wiki](https://github.com/doobidoo/mcp-memory-service/wiki)** – Long-form guides and API reference
-- **[Full documentation index](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/README.md)** – Everything else
-
-Also listed on [Glama](https://glama.ai/mcp/servers/doobidoo/mcp-memory-service) and
-[Spark](https://spark.entire.vc/mcps/vb-mcp-memory-service).
-
----
-
-## 📦 Releases
-
-Every release, with upgrade notes:
-[CHANGELOG.md](https://github.com/doobidoo/mcp-memory-service/blob/main/CHANGELOG.md) ·
-[GitHub Releases](https://github.com/doobidoo/mcp-memory-service/releases) ·
-[archived history](https://github.com/doobidoo/mcp-memory-service/blob/main/docs/archive/CHANGELOG-HISTORIC.md)
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! See [CONTRIBUTING.md](https://github.com/doobidoo/mcp-memory-service/blob/main/CONTRIBUTING.md) for guidelines
-and [SECURITY.md](https://github.com/doobidoo/mcp-memory-service/blob/main/SECURITY.md) for reporting a vulnerability.
-
-Releases, good first issues and new Discussions are announced on our
-[Discord server](https://discord.gg/zrsNMEzmCj), which is also the place for informal chat.
-Claiming an issue, decisions and reviews stay on GitHub.
-
-Who authors this project, who holds copyright, and what every change passes before
-it reaches `main`: [AUTHORSHIP.md](https://github.com/doobidoo/mcp-memory-service/blob/main/AUTHORSHIP.md).
-
-**Quick Development Setup:**
-```bash
-git clone https://github.com/doobidoo/mcp-memory-service.git
-cd mcp-memory-service
-pip install -e .  # Editable install
-pytest tests/      # Run test suite
-```
-
----
-
-## Supporting the Project
-
-MCP Memory Service is maintained by one person. If it saves you or your company time,
-you can support its development via Ko-fi, Buy Me a Coffee or PayPal:
-[SPONSORS.md](https://github.com/doobidoo/mcp-memory-service/blob/main/SPONSORS.md).
+See [upstream documentation](README.upstream.md) for the original service. Fork releases do not publish to PyPI. `tools/handoff/verify_export.py --registry ... --ssh-host ...` compares acknowledged public-event IDs against a read-only hub inventory. `verify_live.py` checks independent MCP clients and real multilingual long-tail retrieval on a separate test project.

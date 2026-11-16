@@ -288,6 +288,10 @@ class ONNXEmbeddingModel:
         
         # Initialize tokenizer
         self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
+        # BERT exports have a finite position table. Long source records are
+        # fragmented by structured handoff, while oversized search prompts are
+        # bounded here instead of failing ONNX inference.
+        self._tokenizer.enable_truncation(max_length=512)
         
         # Get model info
         self.embedding_dimension = self._model.get_outputs()[0].shape[-1]

@@ -178,6 +178,9 @@ async def lifespan(app: FastAPI):
     logger.info("Starting MCP Memory Service HTTP interface...")
     try:
         storage = await create_storage_backend()
+        if os.getenv("MCP_HANDOFF_REQUIRE_ONNX", "false").lower()=="true":
+            if type(getattr(storage,"embedding_model",None)).__name__!="ONNXEmbeddingModel" or getattr(storage,"embedding_backend_degraded",False):
+                raise RuntimeError("Configured handoff hub requires genuine local ONNX embeddings; hash fallback refused")
         set_storage(storage)  # Set the global storage instance
 
         # Initialize consolidation system if enabled — OR if any opt-in interval job
@@ -460,6 +463,10 @@ def create_app() -> FastAPI:
 
     # Include MCP protocol router
     app.include_router(mcp_router, tags=["mcp-protocol"])
+
+    # Private project credentials and bounded structured tools for coding clients.
+    from .api.handoff import router as handoff_router
+    app.include_router(handoff_router)
 
     # Include OAuth routers if enabled
     if OAUTH_ENABLED:

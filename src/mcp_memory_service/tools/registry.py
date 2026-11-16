@@ -1519,3 +1519,11 @@ Examples:
         annotations={"readOnlyHint": True},
     ),
 ]
+
+# The fork's structured handoff surface shares the normal dispatcher and model.
+from ..handoff.service import tools as handoff_tools
+
+TOOL_REGISTRY.extend(
+    ToolDef(name=t["name"], description=t["description"], input_schema=t["inputSchema"], annotations=t["annotations"])
+    for t in handoff_tools()
+)

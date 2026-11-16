@@ -148,7 +148,7 @@ AUDIT_WORDS = {
     "proxmox": ["proxmox on the beelink", "proxmox: lxc for the resolver", "proxmox backups to the nas", "proxmox cluster of 2", "proxmox: gpu passthrough tests"],
     "matrix2": ["matrix: synapse on the vps", "matrix bridges: discord, signal", "matrix element on desktop", "matrix federation rate-limited", "matrix db vacuumed monthly"],
     "prometheus": ["prometheus scrapes 40 targets", "prometheus retention 30d", "prometheus remote write off", "prometheus on the monitor box", "prometheus alerts to ntfy"],
-    "ansible": ["ansible: pull mode on hosts", "ansible vault for secrets", "ansible on the nas via cron", "ansible: roles split per host", "ansible idempotence checked weekly"],
+    "automation": ["automation: pull mode on hosts", "automation vault for secrets", "automation on the nas via cron", "automation: roles split per host", "automation idempotence checked weekly"],
 }
 
 REPO_RULES = [
