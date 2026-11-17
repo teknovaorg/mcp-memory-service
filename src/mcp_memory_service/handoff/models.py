@@ -155,6 +155,8 @@ class History(Input):
     task_id: Short = ""
     after: Annotated[int, Field(ge=0)] = 0
     limit: Annotated[int, Field(ge=1, le=100)] = 30
+    since: Short = Field(default="", description="Inclusive ISO 8601 timestamp with timezone; optional.")
+    until: Short = Field(default="", description="Exclusive ISO 8601 timestamp with timezone; optional.")
 
 
 class Search(Input):

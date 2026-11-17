@@ -22,7 +22,7 @@ Native session sources are read incrementally. Converted Claude transcripts reta
 Download `bootstrap.py` from this fork's GitHub release. It validates release artifact SHA-256 checksums and installs an immutable version, preserving private config. The checksum manifest is trusted from the same GitHub repository; it is not an independent signature.
 
 ```sh
-python3 bootstrap.py hub --release v12.10.0-teknova.6
+python3 bootstrap.py hub --release v12.10.0-teknova.7
 python3 tools/handoff/manage.py provision --inventory private-inventory.json --url https://memory.example.org/handoff
 python3 bootstrap.py client --registry /private/path/connections.json
 python3 /private/path/shared-memory.py --registry /private/path/connections.json install
@@ -46,6 +46,8 @@ Run `shared-memory.py --registry ... sync`, `status`, `context --project example
 `import-legacy --project historical-example /path/old.db` reads the public agent-memory-mcp SQLite schema without changing it, preserving original dates in archive-only records. Do not merge another employer's history into active knowledge.
 
 Every hub update takes a SQLite online backup before switching the executable. Failed startup restores the previous executable and service configuration. `tools/handoff/manage.py verify-backup /path/to/backup.sqlite3` restores into a temporary DB and checks integrity and table counts. Backups contain private data and remain outside GitHub. A future schema change requires a migration and tested rollback; the current initial schema is 1.
+
+`session_history` accepts optional `since` (inclusive) and `until` (exclusive) ISO 8601 timestamps with explicit timezones. Bounds use event occurrence time, retain project isolation and work with the existing `after` pagination cursor. Convert a local reporting day to timezone-aware bounds before requesting it. Missing or invalid event timestamps are excluded when a time bound is supplied; unknown time is not inferred from import time. Omitting both bounds preserves the existing history interface. A new hub release installs this capability directly from the wheel; no host-specific patch is needed.
 
 ## Verification and limitations
 

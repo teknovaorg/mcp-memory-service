@@ -93,6 +93,37 @@ def test_atomic_batch_cursor_and_ownership(store):
     assert store.history("beta")["events"] == []
 
 
+def test_history_time_bounds_are_exclusive_at_end_and_project_scoped(store):
+    events = [
+        {"event_id": "before", "kind": "user_message", "occurred_at": "2026-02-03T20:59:59Z"},
+        {"event_id": "first", "kind": "user_message", "occurred_at": "2026-02-04T00:00:00+03:00"},
+        {"event_id": "last", "kind": "assistant_message", "occurred_at": "2026-02-04T20:59:59+00:00"},
+        {"event_id": "after", "kind": "assistant_message", "occurred_at": "2026-02-04T21:00:00Z"},
+        {"event_id": "unknown", "kind": "command"},
+    ]
+    store.ingest(batch(events=events))
+    store.ingest(batch(project="beta", session_id="other", events=events))
+    bounds = {"since": "2026-02-04T00:00:00+03:00", "until": "2026-02-05T00:00:00+03:00"}
+    page = store.history("alpha", limit=1, **bounds)
+    assert [event["event_id"] for event in page["events"]] == ["first"]
+    assert page["has_more"]
+    next_page = store.history("alpha", after=page["next_after"], **bounds)
+    assert [event["event_id"] for event in next_page["events"]] == ["last"]
+    assert not next_page["has_more"]
+    assert {event["project"] for event in next_page["events"]} == {"alpha"}
+
+
+@pytest.mark.parametrize("bounds", [
+    {"since": "2026-02-04"},
+    {"until": "invalid"},
+    {"since": "2026-02-04T01:00:00"},
+    {"since": "2026-02-05T00:00:00Z", "until": "2026-02-04T00:00:00Z"},
+])
+def test_history_rejects_ambiguous_or_invalid_time_bounds(store, bounds):
+    with pytest.raises(ValueError):
+        store.history("alpha", **bounds)
+
+
 def test_concurrent_checkpoint_writers_have_one_winner(store):
     store.record("task_checkpoint", checkpoint())
 

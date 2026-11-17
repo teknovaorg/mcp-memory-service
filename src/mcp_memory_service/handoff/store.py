@@ -500,8 +500,24 @@ class HandoffStore:
             "coverage": data["coverage"],
         }
 
-    def history(self, project, session_id="", task_id="", after=0, limit=30, topics=()):
+    def history(self, project, session_id="", task_id="", after=0, limit=30, topics=(), since="", until=""):
         where, args = ["e.project=?", "e.sequence> ?"], [project, after]
+        bounds = {}
+        for name, value in (("since", since), ("until", until)):
+            if value:
+                try:
+                    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                    if parsed.utcoffset() is None:
+                        raise ValueError
+                    bounds[name] = parsed.astimezone(timezone.utc)
+                except (ValueError, OverflowError):
+                    raise ValueError("History bounds require ISO timestamps with a timezone") from None
+        if len(bounds) == 2 and bounds["since"] >= bounds["until"]:
+            raise ValueError("History since must precede until")
+        for name, operator in (("since", ">="), ("until", "<")):
+            if name in bounds:
+                where.append(f"julianday(e.occurred_at){operator}julianday(?)")
+                args.append(bounds[name].isoformat())
         if session_id:
             where.append("e.session_id=?")
             args.append(session_id)
