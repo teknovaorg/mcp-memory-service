@@ -21,8 +21,10 @@ Native session sources are read incrementally. Converted Claude transcripts reta
 
 Download `bootstrap.py` from this fork's GitHub release. It validates release artifact SHA-256 checksums and installs an immutable version, preserving private config. The checksum manifest is trusted from the same GitHub repository; it is not an independent signature.
 
+The updater verifies and runs the selected release's installer before applying its configuration, so later installer changes travel with the update. When upgrading from releases before `.8`, download the current `bootstrap.py` once to enable this behavior.
+
 ```sh
-python3 bootstrap.py hub --release v12.10.0-teknova.7
+python3 bootstrap.py hub --release v12.10.0-teknova.8
 python3 tools/handoff/manage.py provision --inventory private-inventory.json --url https://memory.example.org/handoff
 python3 bootstrap.py client --registry /private/path/connections.json
 python3 /private/path/shared-memory.py --registry /private/path/connections.json install
@@ -30,6 +32,8 @@ python3 /private/path/shared-memory.py update
 ```
 
 The hub installer binds to `127.0.0.1:18765`; configure your existing HTTPS gateway to proxy **only `/handoff/*`**, with valid TLS. Provision credentials locally, distribute only the needed project keys, and never commit the private registry. The client installer merges both agents' MCP settings and hooks, preserves other tools, makes config backups, and starts a native login/background service. Codex hook trust is never altered: review the added hooks in `/hooks` or Settings. Restart agent sessions to load new MCP tools. Claude auto-memory is disabled after connecting shared memory; old files are retained and imported as references.
+
+The pinned hub uses `MCP_MEMORY_TOKENIZER_BACKEND=sentencepiece-xlmr` and the original SentencePiece asset from the same model revision. This reduces the vocabulary's resident memory while retaining XLM-R token IDs, special tokens, padding and overflow handling. The ONNX model and existing embeddings stay unchanged; no database rebuild is needed. Other installations keep the `tokenizers` backend unless explicitly configured. The compact backend requires the `sentencepiece-tokenizer` extra and the matching `sentencepiece.bpe.model` beside `tokenizer.json`.
 
 `shared-memory.py discover` inventories source metadata without reading authentication data. Review project ownership and archive scope before provisioning. A private registry has this shape:
 
@@ -51,7 +55,7 @@ Every hub update takes a SQLite online backup before switching the executable. F
 
 ## Verification and limitations
 
-Run `pytest -q tests/unit/test_structured_handoff.py tests/unit/test_handoff_client.py tests/unit/test_section_policy.py`. These tests cover ordering, sections, project isolation, archives, concurrent revisions, stale vectors, incremental source updates, output bounds, native paths, secret redaction and preserving hook trust. The CI matrix exercises native clients on Windows, macOS and Linux. Real-model retrieval, actual source export, service restart and backup checks must additionally be run on the target hub; unit tests intentionally do not download models.
+Run `pytest -q tests/unit/test_structured_handoff.py tests/unit/test_handoff_client.py tests/unit/test_section_policy.py tests/test_sentencepiece_tokenizer.py`. These tests cover ordering, sections, project isolation, archives, concurrent revisions, stale vectors, incremental source updates, output bounds, native paths, secret redaction, tokenizer compatibility and preserving hook trust. The CI matrix exercises native clients on Windows, macOS and Linux. Real-model retrieval, actual source export, service restart and backup checks must additionally be run on the target hub; unit tests intentionally do not download models.
 
 Administrator-owned `redact_patterns` may be provisioned per project in the private inventory; they are enforced by the hub before persistence. Redaction recognizes common credential formats and private addresses. It is not a proof that arbitrary free text contains no sensitive material. Review the corpus and keep the service private. Historical sessions do not reliably encode task boundaries, final decisions or every attachment: coverage remains explicit and partial. Real model-to-model handoff additionally needs both agent logins; a protocol test alone does not establish that.
 

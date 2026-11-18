@@ -14,6 +14,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 import zipfile
@@ -101,6 +102,11 @@ def ensure_model(data):
             "tokenizer.json",
             "tokenizer.json",
             "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8",
+        ),
+        (
+            "sentencepiece.bpe.model",
+            "sentencepiece.bpe.model",
+            "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865",
         ),
     ]
     for source, name, expected in files:
@@ -213,6 +219,7 @@ def hub(args, info, assets, manifest):
         "MCP_MEMORY_SQLITE_PATH": str(data / "memory.sqlite3"),
         "MCP_MEMORY_STORAGE_BACKEND": "sqlite_vec",
         "MCP_MEMORY_USE_ONNX": "true",
+        "MCP_MEMORY_TOKENIZER_BACKEND": "sentencepiece-xlmr",
         "MCP_EMBEDDING_MODEL": MODEL,
         "MCP_MEMORY_ONNX_ALLOW_DOWNLOAD": "0",
         "MCP_MEMORY_ALLOW_HASH_EMBEDDINGS": "0",
@@ -389,6 +396,17 @@ else:
     print(json.dumps(dict(record, installed=True, role="client", client=str(target))))
 
 
+def refresh_installer(info, assets, manifest):
+    expected = manifest["artifacts"]["bootstrap.py"]
+    if hashlib.sha256(Path(__file__).read_bytes()).hexdigest() == expected:
+        return False
+    with tempfile.TemporaryDirectory(prefix="shared-memory-installer-") as directory:
+        installer = artifact(assets, manifest, "bootstrap.py", Path(directory) / "bootstrap.py")
+        result = run([sys.executable, installer, *sys.argv[1:], "--release", info["tag_name"]])
+        print(result.stdout, end="")
+    return True
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("role", choices=["hub", "client"])
@@ -401,6 +419,8 @@ def main():
     parser.add_argument("--client-dir")
     args = parser.parse_args()
     info, assets, manifest = release(args.release)
+    if refresh_installer(info, assets, manifest):
+        return
     (hub if args.role == "hub" else client)(args, info, assets, manifest)
 
 

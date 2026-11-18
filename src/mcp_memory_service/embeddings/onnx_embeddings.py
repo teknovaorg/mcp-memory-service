@@ -287,7 +287,17 @@ class ONNXEmbeddingModel:
         )
         
         # Initialize tokenizer
-        self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
+        tokenizer_backend = os.environ.get("MCP_MEMORY_TOKENIZER_BACKEND", "tokenizers")
+        if tokenizer_backend == "sentencepiece-xlmr":
+            from .sentencepiece_tokenizer import XLMRobertaSentencePieceTokenizer
+
+            self._tokenizer = XLMRobertaSentencePieceTokenizer(
+                tokenizer_path.with_name("sentencepiece.bpe.model")
+            )
+        elif tokenizer_backend == "tokenizers":
+            self._tokenizer = Tokenizer.from_file(str(tokenizer_path))
+        else:
+            raise ValueError("Unsupported MCP_MEMORY_TOKENIZER_BACKEND")
         # BERT exports have a finite position table. Long source records are
         # fragmented by structured handoff, while oversized search prompts are
         # bounded here instead of failing ONNX inference.

@@ -65,6 +65,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+sentencepiece-tokenizer = ["sentencepiece>=0.2.1,<0.3"]
 # Development dependencies for testing and code quality
 dev = [
     "pytest>=8.0.0",
