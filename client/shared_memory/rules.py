@@ -39,16 +39,22 @@ def _safe_relative(rel):
     return Path(*parts)
 
 
-def write_files(root, files, backups):
+def write_files(root, files, backups, targets=None):
     """Write generated files atomically, keeping the installer guidance block.
 
     Hand-written files are copied to the backup directory before the first
     overwrite. Generated rule files that are no longer rendered are removed.
+    ``targets`` maps a rendered relative path to an explicit destination, for
+    example the assistants' user-level instruction files.
     """
     root = Path(root)
+    targets = targets or {}
     written, unchanged, backed_up, removed = [], 0, [], []
     for rel, content in files.items():
-        target = root / _safe_relative(rel)
+        if rel in targets:
+            target = Path(os.path.expandvars(targets[rel])).expanduser()
+        else:
+            target = root / _safe_relative(rel)
         existing = target.read_text(encoding="utf-8") if target.is_file() else None
         block = _BLOCK.search(existing or "")
         if block and block.group(0) not in content:
@@ -91,7 +97,12 @@ def sync(connection, profile, base, root=None):
     target = project_root(profile, root)
     if target is None:
         raise LinkError("No project root for rule files exists on this host")
-    report = write_files(target, listing.get("files", {}), Path(base) / "rules-backups" / profile["project"])
+    report = write_files(
+        target,
+        listing.get("files", {}),
+        Path(base) / "rules-backups" / profile["project"],
+        profile.get("rules_files"),
+    )
     cache = cache_path(base, profile["project"])
     cache.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     cache.write_text(

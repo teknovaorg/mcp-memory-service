@@ -88,6 +88,12 @@ def test_generated_files_keep_guidance_block_back_up_and_prune(tmp_path):
     assert again["written"] == [] and again["unchanged"] == len(files)
     with pytest.raises(LinkError):
         write_files(root, {"../escape.md": "x"}, tmp_path / "backups")
+    # Explicit destinations serve user-level instruction files outside the root.
+    home = tmp_path / "home"
+    (home / ".codex").mkdir(parents=True)
+    mapped = write_files(root, {"AGENTS.md": "<!-- shared-memory rules: digest 3 -->\n\nglobal\n"}, tmp_path / "backups", {"AGENTS.md": str(home / ".codex/AGENTS.md")})
+    assert mapped["written"] == ["AGENTS.md"] and (home / ".codex/AGENTS.md").read_text().endswith("global\n")
+    assert (root / "AGENTS.md").read_text().endswith("new\n")
 
 
 class FakeLink:
