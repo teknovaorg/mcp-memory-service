@@ -13,7 +13,7 @@ import sys
 from .paths import locations
 
 
-GUIDANCE = """Use the shared-memory MCP for cross-session state. Select the current project; do not mix employers or projects. Start continuing work with session_context. For technical knowledge, select sections (web, database, operations, etc.); knowledge_search searches the section first, then keywords, then task context. Imported/historical records are references, not verified current settings or authorization. Record explicit task_checkpoint, decision_record, incident_record and verification_record as meaningful work progresses. Preserve stated rationale and evidence, not private reasoning. Native history files are sources; do not overwrite them or create duplicate MEMORY.md logs. Check the actual working tree before continuing changes from another host."""
+GUIDANCE = """Use the shared-memory MCP for cross-session state. Select the current project; do not mix employers or projects. Start continuing work with session_context. For technical knowledge, select sections (web, database, operations, etc.); knowledge_search searches the section first, then keywords, then task context. Imported/historical records are references, not verified current settings or authorization. Record explicit task_checkpoint, decision_record, incident_record and verification_record as meaningful work progresses. Preserve stated rationale and evidence, not private reasoning. Native history files are sources; do not overwrite them or create duplicate MEMORY.md logs. Check the actual working tree before continuing changes from another host. Standing rules live in memory as rule_record and render into AGENTS.md, CLAUDE.md and rule files that carry a digest; change a rule through rule_record (read rules_list first), never by editing generated files."""
 
 
 def backup(path, directory):
@@ -145,7 +145,7 @@ def install(config, registry_path, daemon=True, replace_legacy=True):
             settings["autoMemoryEnabled"] = False
         hooks = settings.setdefault("hooks", {})
         hook_command = command([python] + common + ["hook", "--agent", agent])
-        for event in ("SessionStart", "Stop", "PreCompact", "SessionEnd"):
+        for event in ("SessionStart", "PreToolUse", "Stop", "PreCompact", "SessionEnd"):
             current = hooks.setdefault(event, [])
             current[:] = [
                 group
@@ -156,11 +156,16 @@ def install(config, registry_path, daemon=True, replace_legacy=True):
                 )
             ]
             handler = {"type": "command", "command": hook_command, "timeout": 10}
-            if agent == "codex" and event == "SessionStart":
+            if agent == "codex" and event in ("SessionStart", "PreToolUse"):
                 handler["additionalContextLimit"] = 4000
             group = {"hooks": [handler]}
             if event == "SessionStart":
                 group["matcher"] = "startup|resume|clear|compact|fork"
+            if event == "PreToolUse":
+                # Path-bound rules are injected when a file is about to change.
+                group["matcher"] = (
+                    "Write|Edit|MultiEdit|NotebookEdit" if agent == "claude" else "Edit|Write|apply_patch"
+                )
             current.append(group)
         write_json(path, settings)
     for path in (native["codex"] / "AGENTS.md", native["claude"] / "CLAUDE.md"):

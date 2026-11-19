@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 Short = Annotated[str, Field(max_length=512)]
 Text = Annotated[str, Field(max_length=8192)]
@@ -143,6 +143,47 @@ class Knowledge(Provenance):
     base_revision: Annotated[int, Field(ge=0)] = 0
 
 
+class Rule(Provenance):
+    """A standing instruction for assistants. Dated decisions belong in Decision."""
+
+    rule_id: Identifier
+    title: Short
+    text: Text
+    group: Short = ""
+    order: Annotated[int, Field(ge=0, le=100000)] = 0
+    load: Literal["always", "paths", "manual"] = "always"
+    placement: Literal["agents", "rules"] = "agents"
+    paths: Items = Field(default_factory=list)
+    audience: Literal["all", "claude", "codex"] = "all"
+    directory: Annotated[str, Field(max_length=256)] = ""
+    status: Literal["active", "retired"] = "active"
+    base_revision: Annotated[int, Field(ge=0)] = 0
+
+    @field_validator("directory")
+    @classmethod
+    def relative_directory(cls, value):
+        raw = value.strip().replace("\\", "/")
+        if raw.startswith("/") or ".." in raw.split("/") or "\x00" in raw or ":" in raw:
+            raise ValueError("directory must be a relative path inside the project")
+        return raw.strip("/")
+
+    @field_validator("paths")
+    @classmethod
+    def relative_paths(cls, value):
+        for path in value:
+            if path.startswith("/") or ".." in path.replace("\\", "/").split("/"):
+                raise ValueError("paths must be relative glob patterns")
+        return value
+
+
+class RulesQuery(Input):
+    audience: Literal["", "all", "claude", "codex"] = ""
+    directory: Annotated[str, Field(max_length=256)] = "*"
+    load: Literal["", "always", "paths", "manual"] = ""
+    include_retired: bool = False
+    render: bool = True
+
+
 class Context(Input):
     task_id: Short = ""
     query: Short = ""
@@ -211,6 +252,16 @@ CONTRACTS = {
         Knowledge,
         False,
         "Save a bounded project fact or imported note with source, status and active/archive scope. Read before updating and pass base_revision.",
+    ),
+    "rule_record": (
+        Rule,
+        False,
+        "Save a standing rule for assistants: text, group, order, load mode (always, paths or manual), paths, audience, placement and directory. Rules render into AGENTS.md, CLAUDE.md and rule files; dated decisions belong in decision_record. Read rules_list first and pass base_revision when changing an existing rule.",
+    ),
+    "rules_list": (
+        RulesQuery,
+        True,
+        "List this project's active rules in render order with a digest and, by default, the rendered rule files. Use it before editing a rule and to refresh generated AGENTS.md, CLAUDE.md and rule files.",
     ),
     "session_context": (
         Context,

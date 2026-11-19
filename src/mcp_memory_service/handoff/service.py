@@ -6,6 +6,7 @@ import hashlib
 
 from .models import CONTRACTS
 from .redact import clean, project_clean
+from .rules import render
 from .store import HandoffStore, RECORDS
 from .topics import classify, normalize
 
@@ -41,6 +42,16 @@ class HandoffService:
                 result = self.records.record(name, dict(data))
                 await self._index(result["record"], result, name)
                 return result
+        if name == "rules_list":
+            data.pop("topics", None)
+            want_render = data.pop("render")
+            rules = self.records.rules(**data)
+            result = {"project": data["project"], "rules": rules, "count": len(rules)}
+            rendered = render(rules, data["project"])
+            result["digest"] = rendered["digest"]
+            if want_render:
+                result["files"] = rendered["files"]
+            return result
         if name == "session_ingest":
             return self.records.ingest(data)
         if name == "session_context":

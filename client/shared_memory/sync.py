@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 
 from .connection import Connection, LinkError
+from .rules import project_root, sync as rules_sync
 from .paths import expanded_roots, in_project, locations, owner
 from .sources import (
     claude_events,
@@ -547,5 +548,22 @@ class Sync:
                             "details": exc.data if isinstance(exc, LinkError) else {},
                         }
                     )
+            if not notes:
+                continue
+            try:
+                profile = scoped_profile(self.registry, name)
+                if project_root(profile) is not None:
+                    self.report.setdefault("rules", {})[name] = rules_sync(
+                        Connection(profile), profile, self.state.path.parent
+                    )
+            except Exception as exc:
+                self.report["errors"].append(
+                    {
+                        "project": name,
+                        "source": "rules",
+                        "type": type(exc).__name__,
+                        "details": exc.data if isinstance(exc, LinkError) else {},
+                    }
+                )
         self.state.set("sync-progress", dict(self.report, phase="complete"))
         return self.report

@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 import sqlite3
 
-from .models import Checkpoint, Decision, Incident, Knowledge, Verification
+from .models import Checkpoint, Decision, Incident, Knowledge, Rule, Verification
 from .redact import clean
 from .topics import classify, definitions, label
 
@@ -17,6 +17,7 @@ RECORDS = {
     "incident_record": ("hf_incidents", Incident, "record_id"),
     "verification_record": ("hf_verifications", Verification, "record_id"),
     "knowledge_record": ("hf_knowledge", Knowledge, "record_id"),
+    "rule_record": ("hf_rules", Rule, "rule_id"),
 }
 _JSON_FIELDS = {
     "completed",
@@ -26,6 +27,7 @@ _JSON_FIELDS = {
     "verification_ids",
     "limitations",
     "alternatives",
+    "paths",
     "topics",
 }
 
@@ -340,6 +342,7 @@ class HandoffStore:
         )
         fields = (
             "statement",
+            "text",
             "choice",
             "rationale",
             "alternatives",
@@ -837,6 +840,27 @@ class HandoffStore:
                 )
         scored.sort(key=lambda r: r[0], reverse=True)
         return [r for _, r in scored[:limit]]
+
+    def rules(self, project, audience="", directory="*", load="", include_retired=False):
+        """Active rules in render order: directory, group, order, identifier."""
+        with self.connection() as db:
+            rows = db.execute(
+                'SELECT * FROM hf_rules WHERE project=? ORDER BY "directory","group","order","rule_id"',
+                (project,),
+            ).fetchall()
+        out = []
+        for row in rows:
+            rule = self.unpack(row)
+            if not include_retired and rule["status"] != "active":
+                continue
+            if audience in ("claude", "codex") and rule["audience"] not in ("all", audience):
+                continue
+            if directory != "*" and rule["directory"] != directory:
+                continue
+            if load and rule["load"] != load:
+                continue
+            out.append(rule)
+        return out
 
     def entry_record(self, project, entity_type, entity_id):
         if entity_type == "hf_events":

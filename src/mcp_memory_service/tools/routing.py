@@ -21,7 +21,7 @@ def _handler(module: str, func: str) -> tuple[str, str]:
 _PRIMARY: dict[str, tuple[str, str]] = {
     **{name: _handler("handoff", name) for name in (
         "session_ingest", "task_checkpoint", "decision_record", "incident_record",
-        "verification_record", "knowledge_record", "session_context", "session_history", "knowledge_search", "section_list", "knowledge_get",
+        "verification_record", "knowledge_record", "session_context", "session_history", "knowledge_search", "section_list", "knowledge_get", "rule_record", "rules_list",
     )},
     "memory_store": _handler("memory", "handle_store_memory"),
     "memory_store_session": _handler("memory", "handle_store_session"),
