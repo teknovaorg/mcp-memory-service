@@ -47,6 +47,11 @@ def test_markdown_import_splits_blocks_in_order():
     assert "<!--" not in "".join(r["text"] for r in rules)
 
 
+def test_markdown_import_transliterates_group_identifiers():
+    rules = parse_markdown("## Память и порядок работы\n\n- Первое.\n\n## Серверы и права\n\n- Второе.\n", "agents")
+    assert [r["rule_id"] for r in rules] == ["agents-pamyat-i-poryadok-raboty-01", "agents-servery-i-prava-02"]
+
+
 def test_markdown_import_rule_file_with_paths():
     text = '---\npaths:\n  - "**/*.sh"\n  - "scripts/**"\n---\n\n# Bash\n\n- set -euo pipefail\n'
     (rule,) = parse_markdown(text, "bash", placement="rules")

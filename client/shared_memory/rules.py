@@ -191,12 +191,18 @@ def context_for(base, project, agent, event, limit=9000):
     return "\n\n".join(parts)[:limit]
 
 
+_TRANSLIT = {
+    "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "e", "ж": "zh", "з": "z",
+    "и": "i", "й": "j", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p", "р": "r",
+    "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "c", "ч": "ch", "ш": "sh", "щ": "sch",
+    "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+}
+
+
 def _slug(value):
-    value = re.sub(r"[^a-z0-9а-яё]+", "-", value.casefold()).strip("-")
-    table = str.maketrans("абвгдеёзийклмнопрстуфхыэ", "abvgdeezijklmnoprstufhye")
-    value = value.translate(table)
-    value = re.sub(r"[^a-z0-9-]+", "", value)
-    return value[:40] or "intro"
+    value = "".join(_TRANSLIT.get(ch, ch) for ch in value.casefold())
+    value = re.sub(r"[^a-z0-9]+", "-", value).strip("-")
+    return value[:40].rstrip("-") or "intro"
 
 
 def parse_markdown(text, prefix, placement="agents", directory="", audience="all"):
