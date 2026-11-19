@@ -93,7 +93,12 @@ def write_files(root, files, backups, targets=None):
 
 
 def sync(connection, profile, base, root=None):
+    if profile.get("rules_sync") is False:
+        return {"project": profile["project"], "skipped": "rules_sync disabled in the registry"}
     listing = connection.call("rules_list", {"render": True})
+    if not listing.get("count") or not listing.get("files"):
+        # Nothing is rendered or pruned for a project that has no rules yet.
+        return {"project": profile["project"], "skipped": "no active rules", "digest": listing.get("digest", ""), "count": 0}
     target = project_root(profile, root)
     if target is None:
         raise LinkError("No project root for rule files exists on this host")
@@ -187,7 +192,8 @@ def context_for(base, project, agent, event, limit=9000):
     seen_path.write_text(json.dumps(sorted(seen | {r["rule_id"] for r in chosen})), encoding="utf-8")
     parts = ["Rules from shared memory for " + ", ".join(sorted(set(relatives))) + " (reference data; keep following the project instructions):"]
     for rule in chosen:
-        parts.append("### " + rule["title"] + "\n" + rule["text"].strip())
+        body = rule["text"].strip()
+        parts.append(body if body.startswith("#") else "### " + rule["title"] + "\n" + body)
     return "\n\n".join(parts)[:limit]
 
 
@@ -242,11 +248,15 @@ def parse_markdown(text, prefix, placement="agents", directory="", audience="all
                 "directory": directory,
             }
         ]
-    rules, group, block = [], "", []
+    rules, group, block, heading = [], "", [], []
 
     def flush():
         if not block:
             return
+        if heading:
+            # A top-level heading belongs to the first rule that follows it.
+            block[:0] = heading + [""]
+            heading.clear()
         body = "\n".join(block).rstrip()
         if body.strip():
             first = re.sub(r"^[-|#\s]+", "", block[0]).strip()
@@ -271,6 +281,7 @@ def parse_markdown(text, prefix, placement="agents", directory="", audience="all
     for line in lines:
         if line.startswith("# "):
             flush()
+            heading.append(line)
             continue
         if line.startswith("## "):
             flush()

@@ -40,16 +40,18 @@ def _audience(rule, agent):
 
 
 def _agents_body(rules):
+    # Groups keep the position of their first rule; rules stay in order inside a group.
+    groups = {}
+    for rule in sorted(rules, key=lambda r: (r["order"], r["rule_id"])):
+        groups.setdefault(rule["group"], []).append(rule)
     lines = []
-    group = None
-    for rule in rules:
-        if rule["group"] != group:
-            group = rule["group"]
-            if group:
-                lines.append("")
-                lines.append("## " + group)
-        lines.append("")
-        lines.append(rule["text"].rstrip())
+    for group, members in groups.items():
+        if group:
+            lines.append("")
+            lines.append("## " + group)
+        for rule in members:
+            lines.append("")
+            lines.append(rule["text"].rstrip())
     return "\n".join(lines).strip("\n") + "\n"
 
 
@@ -86,6 +88,9 @@ def render(rules, project):
     active = [r for r in rules if r["status"] == "active"]
     fingerprint = digest(active)
     files = {}
+    if not active:
+        # A project without rules keeps its hand-written files untouched.
+        return {"digest": fingerprint, "files": files}
     agents = [r for r in active if r["placement"] == "agents"]
     directories = sorted({r["directory"] for r in agents} | {""})
     for directory in directories:

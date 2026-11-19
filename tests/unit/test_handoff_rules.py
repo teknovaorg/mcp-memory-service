@@ -32,9 +32,10 @@ def test_rules_are_ordered_filtered_and_searchable(store):
     store.record("rule_record", rule(rule_id="c", group="Style", order=5, audience="claude"))
     store.record("rule_record", rule(rule_id="old", status="retired", text="- Obsolete."))
     store.record("rule_record", rule(rule_id="d", directory="tools", text="- Tools rule."))
-    assert [r["rule_id"] for r in store.rules("alpha")] == ["a", "b", "c", "d"]
+    # Document order comes from "order", not from group names.
+    assert [r["rule_id"] for r in store.rules("alpha")] == ["c", "a", "b", "d"]
     assert [r["rule_id"] for r in store.rules("alpha", audience="codex")] == ["a", "b", "d"]
-    assert [r["rule_id"] for r in store.rules("alpha", directory="")] == ["a", "b", "c"]
+    assert [r["rule_id"] for r in store.rules("alpha", directory="")] == ["c", "a", "b"]
     assert "old" in [r["rule_id"] for r in store.rules("alpha", include_retired=True)]
     assert not store.rules("beta")
     found = store.keyword_search("alpha", "obsolete rule comments")
@@ -60,7 +61,7 @@ def test_render_layout_and_stable_digest(store):
     store.record("rule_record", rule(rule_id="intro", group="", order=0, text="Project rules."))
     store.record("rule_record", rule(rule_id="srv", group="Servers", order=1, text="- Read only."))
     store.record("rule_record", rule(rule_id="cl", group="Claude", order=1, audience="claude", text="- Claude only."))
-    store.record("rule_record", rule(rule_id="cx", group="Codex", order=1, audience="codex", text="- Codex only."))
+    store.record("rule_record", rule(rule_id="cx", group="Codex", order=2, audience="codex", text="- Codex only."))
     store.record("rule_record", rule(rule_id="sub", directory="tools", group="Tools", text="- Sub rule."))
     store.record("rule_record", rule(rule_id="bash", placement="rules", load="paths", paths=["**/*.sh"], title="Bash", text="- set -euo pipefail"))
     store.record("rule_record", rule(rule_id="style", placement="rules", load="always", title="Style", text="# Style\n\n- Plain words."))
@@ -75,6 +76,7 @@ def test_render_layout_and_stable_digest(store):
     agents = files["AGENTS.md"]
     assert agents.startswith("<!-- " + MARKER) and first["digest"] in agents
     assert "Project rules." in agents and "## Servers" in agents and "## Codex" in agents
+    assert agents.index("## Servers") < agents.index("## Codex") and agents.count("## Servers") == 1
     assert "Claude only" not in agents and "Gone." not in agents and "Sub rule" not in agents
     assert files["CLAUDE.md"].splitlines()[2] == "@AGENTS.md" and "Claude only" in files["CLAUDE.md"]
     assert "Sub rule" in files["tools/AGENTS.md"] and "@AGENTS.md" in files["tools/CLAUDE.md"]
@@ -87,6 +89,12 @@ def test_render_layout_and_stable_digest(store):
     store.record("rule_record", rule(rule_id="srv", group="Servers", order=1, text="- Read and ask.", base_revision=1))
     second = render(store.rules("alpha"), "alpha")
     assert second["digest"] != first["digest"] and "Read and ask" in second["files"]["AGENTS.md"]
+
+
+def test_empty_rule_set_renders_no_files(store):
+    assert render([], "alpha")["files"] == {}
+    store.record("rule_record", rule(rule_id="gone", status="retired"))
+    assert render(store.rules("alpha", include_retired=True), "alpha")["files"] == {}
 
 
 def test_rules_query_contract_defaults():

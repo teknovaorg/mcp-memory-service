@@ -115,7 +115,7 @@ class HandoffStore:
                 fields = []
                 for name in model.model_fields:
                     if name != "base_revision":
-                        sql_type = "INTEGER" if name == "exit_code" else "TEXT"
+                        sql_type = "INTEGER" if name in ("exit_code", "order") else "TEXT"
                         fields.append(f'"{name}" {sql_type}')
                 db.execute(
                     f"CREATE TABLE IF NOT EXISTS {table} ("
@@ -172,6 +172,8 @@ class HandoffStore:
         for key in _JSON_FIELDS:
             if key in data:
                 data[key] = json.loads(data[key])
+        if "order" in data and data["order"] is not None:
+            data["order"] = int(data["order"])
         return data
 
     def project(self, db, name):
@@ -842,10 +844,10 @@ class HandoffStore:
         return [r for _, r in scored[:limit]]
 
     def rules(self, project, audience="", directory="*", load="", include_retired=False):
-        """Active rules in render order: directory, group, order, identifier."""
+        """Active rules in document order: directory, order, identifier."""
         with self.connection() as db:
             rows = db.execute(
-                'SELECT * FROM hf_rules WHERE project=? ORDER BY "directory","group","order","rule_id"',
+                'SELECT * FROM hf_rules WHERE project=? ORDER BY "directory",CAST("order" AS INTEGER),"rule_id"',
                 (project,),
             ).fetchall()
         out = []

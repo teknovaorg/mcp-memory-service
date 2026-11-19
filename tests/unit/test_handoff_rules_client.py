@@ -40,6 +40,7 @@ def test_markdown_import_splits_blocks_in_order():
     rules = parse_markdown(AGENTS, "agents")
     assert [r["rule_id"] for r in rules] == ["agents-intro-01", "agents-servers-02", "agents-servers-03", "agents-servers-04", "agents-style-05"]
     assert [r["group"] for r in rules] == ["", "Servers", "Servers", "Servers", "Style"]
+    assert rules[0]["text"] == "# Project rules\n\nIntro paragraph that applies everywhere.\n"
     assert rules[1]["text"] == "- Read only on production.\n  Prepare commands for the operator.\n"
     assert rules[3]["text"].startswith("| Scope |") and rules[3]["title"] == "Scope"
     assert [r["order"] for r in rules] == [10, 20, 30, 40, 50]
@@ -125,12 +126,17 @@ def test_sync_writes_cache_and_hook_injects_matching_rules_once(tmp_path, monkey
         "files": {"AGENTS.md": "<!-- shared-memory rules: digest abc123 -->\n\nrules\n"},
     }
     profile = {"project": "acme", "roots": [str(root)], "url": "https://memory.test/handoff", "token": "t"}
+    (root / "AGENTS.md").write_text("hand written\n", encoding="utf-8")
+    empty = sync(FakeLink({"digest": "0", "count": 0, "rules": [], "files": {}}), profile, base)
+    assert empty["skipped"] == "no active rules" and (root / "AGENTS.md").read_text() == "hand written\n"
+    assert "skipped" in sync(FakeLink(listing), dict(profile, rules_sync=False), base)
     report = sync(FakeLink(listing), profile, base)
     assert report["digest"] == "abc123" and report["written"] == ["AGENTS.md"]
     assert (root / "AGENTS.md").read_text().endswith("rules\n")
     event = {"hook_event_name": "PreToolUse", "session_id": "s1", "cwd": str(root), "tool_name": "Write", "tool_input": {"file_path": str(root / "scripts/run.sh")}}
     text = context_for(base, "acme", "claude", event)
     assert "set -euo pipefail" in text and "codex rule" not in text and "scripts/run.sh" in text
+    assert "### Bash" in text and text.count("Bash") == 1
     assert context_for(base, "acme", "claude", event) == ""
     patch = {"hook_event_name": "PreToolUse", "session_id": "s2", "cwd": str(root), "tool_name": "apply_patch", "tool_input": {"patch": "*** Begin Patch\n*** Update File: scripts/run.sh\n*** End Patch"}}
     assert "codex rule" in context_for(base, "acme", "codex", patch)
